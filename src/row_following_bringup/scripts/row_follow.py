@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from sensor_msgs.msg import Image
+from tf2_msgs.msg import TFMessage
 
 import cv2
 from cv_bridge import CvBridge
@@ -48,15 +49,22 @@ def pid(error):
 
 class RowFollow(Node):
     def __init__(self):
-        super().__init__('velocity_publisher')
+        super().__init__('row_follow_node')
         self.publisher_ = self.create_publisher(Twist, 'cmd_vel', 1)
         self.image_subscription = self.create_subscription(
             Image,
             '/rgb',
             self.image_callback,
             1)
+        self.subscription = self.create_subscription(
+            TFMessage,
+            '/tf',
+            self.tf_callback,
+            10
+        )
 
         self.model = YOLO(yolo_model_path)
+        self.row_present = True
         self.get_logger().info('Row Following Started!')
 
     def image_callback(self, msg):
@@ -112,36 +120,45 @@ class RowFollow(Node):
 
         # print(angle_degrees)
 
-        cv2.putText(cropped_rgb_image, f'{angle_degrees}', (width // 2, max(35, y1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(cropped_rgb_image, f'{angle_degrees:.2f}', (width // 2, max(35, y1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         cv2.imshow("YOLO Output", cropped_rgb_image)
         cv2.waitKey(1)
 
-        # if center_coordinates[0] > ground_center_coordinates[0]:
-        #     cmd_vel.angular.z = 0.1
-        # elif center_coordinates[0] < ground_center_coordinates[0]:
-        #     cmd_vel.angular.z = -0.1
-        # else:
-        #     cmd_vel.angular.z = 0.0
-        cmd_vel.linear.x = 1.0
-        # self.publisher_.publish(cmd_vel)
+        if self.row_present:
+            desired_value = 0.0
+            actual_value = angle_radians
+            error = abs(desired_value - actual_value)
+            output = pid(error)
 
-        desired_value = 0.0
-        actual_value = angle_radians
-        error = abs(desired_value - actual_value)
-        output = pid(error)
+            cmd_vel.linear.x = 0.5
 
-        if center_coordinates[0] > ground_center_coordinates[0]:
-            cmd_vel.angular.z = output
-            print(output)
-        elif center_coordinates[0] < ground_center_coordinates[0]:
-            cmd_vel.angular.z = -output
-            print(-output)
+            if center_coordinates[0] > ground_center_coordinates[0]:
+                cmd_vel.angular.z = output
+                print(output)
+            elif center_coordinates[0] < ground_center_coordinates[0]:
+                cmd_vel.angular.z = -output
+                print(-output)
+            else:
+                cmd_vel.angular.z = 0.0
+                print("0.0")
         else:
+            cmd_vel.linear.x = 0.0
             cmd_vel.angular.z = 0.0
-            print("0.0")
 
         self.publisher_.publish(cmd_vel)
+
+    def tf_callback(self, msg):
+        for transform in msg.transforms:
+            # Check if the transform is from 'World' to 'base_link'
+            if transform.header.frame_id == 'map' and transform.child_frame_id == 'base_link':
+                x = transform.transform.translation.x
+                if x >= 3.7:
+                    self.row_present = False
+                    self.get_logger().info('End of the row!')
+                else:
+                    self.row_present = True
+                
 
 def main(args=None):
     rclpy.init(args=args)

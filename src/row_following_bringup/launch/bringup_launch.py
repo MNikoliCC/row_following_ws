@@ -31,6 +31,11 @@ def generate_launch_description():
         ),
         Node(
             package='row_following_bringup',
+            executable='tf2navsatfix.py',
+            output='screen'
+        ),
+        Node(
+            package='row_following_bringup',
             executable='navsatfix2tf.py',
             output='screen'
         )
