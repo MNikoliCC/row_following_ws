@@ -2,3 +2,5 @@
 /install
 /log
 /src/.vscode
+/.vscode
+/src/row_following_bringup/scripts/__pycache__
