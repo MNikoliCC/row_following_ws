@@ -39,9 +39,9 @@ def generate_launch_description():
             executable='navsatfix2tf.py',
             output='screen'
         ),
-        Node(
-            package='row_following_bringup',
-            executable='nav2_test.py',
-            output='screen'
-        )
+        # Node(
+        #     package='row_following_bringup',
+        #     executable='nav2_test.py',
+        #     output='screen'
+        # )
     ])

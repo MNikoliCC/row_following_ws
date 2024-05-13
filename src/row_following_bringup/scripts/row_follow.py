@@ -19,6 +19,8 @@ from ultralytics import YOLO
 from ament_index_python.packages import get_package_share_directory
 import os
 
+from nav2_test import FollowPathClient
+
 package_dir = get_package_share_directory("row_following_bringup")
 yolo_model_path = os.path.join(package_dir, 'resource', 'best.pt')
 
@@ -156,6 +158,8 @@ class RowFollow(Node):
                 if x >= 3.7:
                     self.row_present = False
                     self.get_logger().info('End of the row!')
+                    # turn = FollowPathClient()
+                    # turn._send_goal()
                 else:
                     self.row_present = True
                 
@@ -165,6 +169,7 @@ def main(args=None):
     row_follow_node = RowFollow()
     while rclpy.ok():
         rclpy.spin(row_follow_node)
+        # rclpy.spin_once(row_follow_node)
     row_follow_node.destroy_node()
     rclpy.shutdown()
 
