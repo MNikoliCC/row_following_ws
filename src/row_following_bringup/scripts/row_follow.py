@@ -2,9 +2,8 @@
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import JointState
 from sensor_msgs.msg import Image
-from tf2_msgs.msg import TFMessage
+from sensor_msgs.msg import NavSatFix
 
 import cv2
 from cv_bridge import CvBridge
@@ -19,6 +18,7 @@ from ultralytics import YOLO
 from ament_index_python.packages import get_package_share_directory
 import os
 
+import pymap3d as pm
 from nav2_test import FollowPathClient
 
 package_dir = get_package_share_directory("row_following_bringup")
@@ -59,9 +59,9 @@ class RowFollow(Node):
             self.image_callback,
             1)
         self.subscription = self.create_subscription(
-            TFMessage,
-            '/tf',
-            self.tf_callback,
+            NavSatFix,
+            '/navsatfix',
+            self.navsat_callback,
             10
         )
 
@@ -150,18 +150,26 @@ class RowFollow(Node):
 
         self.publisher_.publish(cmd_vel)
 
-    def tf_callback(self, msg):
-        for transform in msg.transforms:
-            # Check if the transform is from 'World' to 'base_link'
-            if transform.header.frame_id == 'map' and transform.child_frame_id == 'base_link':
-                x = transform.transform.translation.x
-                if x >= 3.7:
-                    self.row_present = False
-                    self.get_logger().info('End of the row!')
-                    # turn = FollowPathClient()
-                    # turn._send_goal()
-                else:
-                    self.row_present = True
+    def navsat_callback(self, msg):
+        lat = msg.latitude
+        lon = msg.longitude
+        alt = msg.altitude
+        x, y, z = pm.geodetic2enu(lat=lat, lon=lon, h=alt,lat0=self.ref_lat, lon0=self.ref_lon, h0=self.ref_alt)
+        if x >= 3.7:
+            self.row_present = False
+            self.get_logger().info('End of the row!')
+        else:
+            self.row_present = True
+
+        # for transform in msg.transforms:
+        #     # Check if the transform is from 'World' to 'base_link'
+        #     if transform.header.frame_id == 'map' and transform.child_frame_id == 'base_link':
+        #         x = transform.transform.translation.x
+        #         if x >= 3.7:
+        #             self.row_present = False
+        #             self.get_logger().info('End of the row!')
+        #         else:
+        #             self.row_present = True
                 
 
 def main(args=None):

@@ -37,7 +37,7 @@ class TFToNavSatNode(Node):
                 # Convert local ENU coordinates to geodetic coordinates
                 # lat, lon, alt = pm.enu2geodetic(e=x, n=y, u=z, lat0=self.ref_lat, lon0=self.ref_lon, h0=self.ref_alt, deg=False)
                 lat, lon, alt = pm.enu2geodetic(e=x, n=y, u=z, lat0=self.ref_lat, lon0=self.ref_lon, h0=self.ref_alt)
-                x, y, z = pm.geodetic2enu(lat=lat, lon=lon, h=alt,lat0=self.ref_lat, lon0=self.ref_lon, h0=self.ref_alt)
+                # x, y, z = pm.geodetic2enu(lat=lat, lon=lon, h=alt,lat0=self.ref_lat, lon0=self.ref_lon, h0=self.ref_alt)
                 
                 navsat_msg = NavSatFix()
                 navsat_msg.header.stamp = self.get_clock().now().to_msg()
