@@ -30,7 +30,7 @@ last_time = 0
 integral = 0
 previous = 0
 
-kp = 0.3
+kp = 0.5
 ki = 0
 kd = 0
 
@@ -66,7 +66,13 @@ class RowFollow(Node):
         )
 
         self.model = YOLO(yolo_model_path)
-        self.row_present = True
+        self.mode = None
+        self.out = False
+
+        self.ref_lat = 45.2586161
+        self.ref_lon = 19.8066591
+        self.ref_alt = 76.0
+
         self.get_logger().info('Row Following Started!')
 
     def image_callback(self, msg):
@@ -127,26 +133,25 @@ class RowFollow(Node):
         cv2.imshow("YOLO Output", cropped_rgb_image)
         cv2.waitKey(1)
 
-        if self.row_present:
-            desired_value = 0.0
-            actual_value = angle_radians
-            error = abs(desired_value - actual_value)
-            output = pid(error)
+        if self.mode == 'turn':
+            return
 
-            cmd_vel.linear.x = 0.5
+        desired_value = 0.0
+        actual_value = angle_radians
+        error = abs(desired_value - actual_value)
+        output = pid(error)
 
-            if center_coordinates[0] > ground_center_coordinates[0]:
-                cmd_vel.angular.z = output
-                print(output)
-            elif center_coordinates[0] < ground_center_coordinates[0]:
-                cmd_vel.angular.z = -output
-                print(-output)
-            else:
-                cmd_vel.angular.z = 0.0
-                print("0.0")
+        cmd_vel.linear.x = 0.5
+
+        if center_coordinates[0] > ground_center_coordinates[0]:
+            cmd_vel.angular.z = output
+            print(output)
+        elif center_coordinates[0] < ground_center_coordinates[0]:
+            cmd_vel.angular.z = -output
+            print(-output)
         else:
-            cmd_vel.linear.x = 0.0
             cmd_vel.angular.z = 0.0
+            print("0.0")
 
         self.publisher_.publish(cmd_vel)
 
@@ -155,21 +160,27 @@ class RowFollow(Node):
         lon = msg.longitude
         alt = msg.altitude
         x, y, z = pm.geodetic2enu(lat=lat, lon=lon, h=alt,lat0=self.ref_lat, lon0=self.ref_lon, h0=self.ref_alt)
-        if x >= 3.7:
-            self.row_present = False
+        if x >= 3.5 and self.out == False:
+            self.out = True
+            self.mode = 'turn'
+            obj = FollowPathClient()
+            while rclpy.ok() and obj.flag:
+                rclpy.spin_once(obj, timeout_sec=0.1)
+            self.get_logger().info('Path goal reached or aborted.')
             self.get_logger().info('End of the row!')
+            self.mode = 'ml'
         else:
-            self.row_present = True
+            self.mode = 'ml'
 
         # for transform in msg.transforms:
         #     # Check if the transform is from 'World' to 'base_link'
         #     if transform.header.frame_id == 'map' and transform.child_frame_id == 'base_link':
         #         x = transform.transform.translation.x
         #         if x >= 3.7:
-        #             self.row_present = False
+        #             self.mode = False
         #             self.get_logger().info('End of the row!')
         #         else:
-        #             self.row_present = True
+        #             self.mode = True
                 
 
 def main(args=None):

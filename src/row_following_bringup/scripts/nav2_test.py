@@ -37,8 +37,9 @@ class FollowPathClient(Node):
         path_msg.header.frame_id = 'odom'
         
         radius = (0.5 + 0.35) / 2
-        step = 10
+        step = 1
         left_turn = True
+        x_offset = 0
 
         tf_odom_base_link = None
         # rclpy.spin_once(self)
@@ -52,49 +53,49 @@ class FollowPathClient(Node):
                 self.get_logger().info(f"{e}")
                 rclpy.spin_once(self, timeout_sec=0.1)
 
-        for angle in range(-90, 90, step):
+        for angle in range(-90, 91, step):
             angle_rad = math.radians(angle)
-            x = radius * math.cos(angle_rad)
+            x = x_offset + radius * math.cos(angle_rad)
             y = radius * math.sin(angle_rad)
-            # self.get_logger().info("HERE")
-
-            # waypoint_msg.pose.position.x = x
-            # if left_turn:
-            #     waypoint_msg.pose.position.y = y + radius
-            # else:
-            #     waypoint_msg.pose.position.y = y - radius
-
-            # waypoint_msg.pose.orientation.w = 1.0
-
-            # path_msg.poses.append(waypoint_msg)
             yaw = angle_rad + math.pi / 2
-            # cos_yaw = math.cos(yaw)
-            # sin_yaw = math.sin(yaw)
-
-            # tf_base_link_point = np.eye(4)
-            # tf_base_link_point[0, 0] = cos_yaw
-            # tf_base_link_point[0, 1] = -sin_yaw
-            # tf_base_link_point[1, 0] = sin_yaw
-            # tf_base_link_point[1, 1] = cos_yaw
 
             rotation_matrix = euler2mat(0, 0, yaw, 'sxyz')
             tf_base_link_point = np.eye(4)
             tf_base_link_point[:3, :3] = rotation_matrix
 
             if left_turn:
-                tf_base_link_point[:3, 3] = np.array([x , y + radius, 0])
+                translation_y = y + radius
             else:
-                tf_base_link_point[:3, 3] = np.array([x , y - radius, 0])
+                translation_y = y - radius
 
-            waypoint = tf_odom_base_link @ tf_base_link_point
+            if angle == -90:
+                for line in range(0, 75, step):
+                    x_offset += step / 100
 
-            waypoint_msg_pose = rnp.msgify(Pose, waypoint)
+                    tf_base_link_point[:3, 3] = np.array([x_offset, translation_y, 0])
 
-            waypoint_msg_pose_stamped = PoseStamped()
-            waypoint_msg_pose_stamped.header.frame_id = 'odom'
-            waypoint_msg_pose_stamped.pose = waypoint_msg_pose
+                    waypoint = tf_odom_base_link @ tf_base_link_point
 
-            path_msg.poses.append(waypoint_msg_pose_stamped)
+                    waypoint_msg_pose = rnp.msgify(Pose, waypoint)
+
+                    waypoint_msg_pose_stamped = PoseStamped()
+                    waypoint_msg_pose_stamped.header.frame_id = 'odom'
+                    waypoint_msg_pose_stamped.pose = waypoint_msg_pose
+
+                    path_msg.poses.append(waypoint_msg_pose_stamped)
+
+            else:
+                tf_base_link_point[:3, 3] = np.array([x, translation_y, 0])
+
+                waypoint = tf_odom_base_link @ tf_base_link_point
+
+                waypoint_msg_pose = rnp.msgify(Pose, waypoint)
+
+                waypoint_msg_pose_stamped = PoseStamped()
+                waypoint_msg_pose_stamped.header.frame_id = 'odom'
+                waypoint_msg_pose_stamped.pose = waypoint_msg_pose
+
+                path_msg.poses.append(waypoint_msg_pose_stamped)
 
         self.path_publisher.publish(path_msg)
 
@@ -114,6 +115,7 @@ class FollowPathClient(Node):
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().info('Goal rejected')
+            self.flag = False
             return
 
         self.get_logger().info('Goal accepted')

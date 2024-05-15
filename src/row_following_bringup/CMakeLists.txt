@@ -10,8 +10,8 @@ find_package(ros2_numpy REQUIRED)
 
 install(PROGRAMS
   scripts/row_follow.py
-  scripts/tf2navsatfix.py
-  scripts/navsatfix2tf.py
+  # scripts/tf2navsatfix.py
+  # scripts/navsatfix2tf.py
   scripts/nav2_test.py
   DESTINATION lib/${PROJECT_NAME})
 
