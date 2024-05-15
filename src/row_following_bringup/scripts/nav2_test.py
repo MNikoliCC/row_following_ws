@@ -29,7 +29,53 @@ class FollowPathClient(Node):
         self._action_client = ActionClient(self, FollowPath, 'follow_path')
 
         self._send_goal()   # Now working
+        # self.go_forward()
         self.get_logger().info("Path!")
+
+    def go_forward(self):
+        # Define the path
+        path_msg = Path()
+        path_msg.header.frame_id = 'odom'
+        step = 1
+        x_offset = 0.0
+        tf_base_link_point = np.eye(4)
+        tf_odom_base_link = None
+
+        while tf_odom_base_link is None:
+            try:
+                rclpy.spin_once(self, timeout_sec=0.1)
+                odom_base_link_msg = self.tf_buffer.lookup_transform('odom', 'base_link', rclpy.time.Time())
+                tf_odom_base_link = rnp.numpify(odom_base_link_msg.transform)
+            except Exception as e:
+                self.get_logger().info(f"{e}")
+                rclpy.spin_once(self, timeout_sec=0.1)
+                
+        for line in range(0, 400, step):
+            x_offset += step / 100
+            print(x_offset)
+
+            tf_base_link_point[:3, 3] = np.array([x_offset, 0, 0])
+
+            waypoint = tf_odom_base_link @ tf_base_link_point
+
+            waypoint_msg_pose = rnp.msgify(Pose, waypoint)
+
+            waypoint_msg_pose_stamped = PoseStamped()
+            waypoint_msg_pose_stamped.header.frame_id = 'odom'
+            waypoint_msg_pose_stamped.pose = waypoint_msg_pose
+
+            path_msg.poses.append(waypoint_msg_pose_stamped)
+
+        self.path_publisher.publish(path_msg)
+
+        # Create the goal message
+        goal_msg = FollowPath.Goal()
+        goal_msg.path = path_msg
+
+        # Wait until the action server is ready and send the goal
+        self._action_client.wait_for_server()
+        self._send_goal_future = self._action_client.send_goal_async(goal_msg)
+        self._send_goal_future.add_done_callback(self.goal_response_callback)
 
     def _send_goal(self):
         # Define the path
@@ -53,7 +99,7 @@ class FollowPathClient(Node):
                 self.get_logger().info(f"{e}")
                 rclpy.spin_once(self, timeout_sec=0.1)
 
-        for angle in range(-90, 91, step):
+        for angle in range(-90, 80, step):
             angle_rad = math.radians(angle)
             x = x_offset + radius * math.cos(angle_rad)
             y = radius * math.sin(angle_rad)

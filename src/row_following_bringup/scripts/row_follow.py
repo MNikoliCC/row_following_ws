@@ -32,7 +32,7 @@ previous = 0
 
 kp = 0.5
 ki = 0
-kd = 0
+kd = 0.1
 
 def pid(error):
     global last_time, integral, previous
