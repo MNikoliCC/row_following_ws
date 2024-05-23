@@ -24,10 +24,13 @@ from nav2_test import FollowPathClient
 package_dir = get_package_share_directory("row_following_bringup")
 yolo_model_path = os.path.join(package_dir, 'resource', 'best.pt')
 
+video_path = "/home/milos/row_following_ws/src/row_following_bringup/resource/wide1.mp4"
+
 classNames = ['Ground', 'CilantroOm']
 
 last_time = 0
 integral = 0
+
 previous = 0
 
 kp = 0.5
@@ -66,7 +69,7 @@ class RowFollow(Node):
         )
 
         self.model = YOLO(yolo_model_path)
-        self.mode = 'ml'
+        self.mode = 'rd'
         self.out = False
 
         self.ref_lat = 45.2586161
@@ -208,6 +211,66 @@ class RowFollow(Node):
             # Display the image
             cv2.imshow('Detected Lines', rgb_image)
             cv2.waitKey(1)
+        elif self.mode == 'rd':
+            cap = cv2.VideoCapture(video_path)
+
+            if not cap.isOpened():
+                print("Error: Could not open video.")
+                return
+
+            while True:
+                ret, frame = cap.read()
+
+                if not ret:
+                    print("Reached the end of the video.")
+                    break
+                
+                desired_width=1280
+                desired_height=720
+                # Resize the frame
+                resized_frame = cv2.resize(frame, (desired_width, desired_height))
+
+                # Crop the frame
+                height, width, channels = resized_frame.shape
+                cropped_rgb_image = resized_frame[int((height / 2) - 40): int((height / 2) + 40), :]
+
+                results = self.model(cropped_rgb_image)
+
+                for r in results:
+                    boxes = r.boxes
+                    for box in boxes:
+                        x1, y1, x2, y2 = box.xyxy[0]
+                        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+
+                        w, h = x2 - x1, y2 - y1
+
+                        conf = math.ceil((box.conf[0] * 100)) / 100
+
+                        cls = int(box.cls[0])
+
+                        class_colors = {
+                            0: (255, 0, 0),   # Blue for 'Ground'
+                            1: (0, 255, 0)    # Green for 'CilantroOm'
+                        }
+                        color = class_colors.get(cls, (0, 0, 255))  # Default to red if class not found
+                        if cls == 0:
+                            ground_center_coordinates = (x1 + (w // 2), y1 + (h // 2))
+                            output = self.find_angle_diff(cropped_rgb_image, ground_center_coordinates)
+
+                        cmd_vel.linear.x = 0.1
+                        cmd_vel.angular.z = output
+                        self.publisher_.publish(cmd_vel)
+
+                        cv2.rectangle(cropped_rgb_image, (x1, y1), (x1 + w, y1 + h), color, 2)
+                        cv2.putText(cropped_rgb_image, f'{classNames[cls]} {conf}', (max(0, x1), max(35, y1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+                # Display the frame
+                cv2.imshow("Video", cropped_rgb_image)
+
+                delay=100
+                # Press 'q' to exit the video
+                if cv2.waitKey(delay) & 0xFF == ord('q'):
+                    break
 
         if self.mode == 'turn':
             return
@@ -231,7 +294,7 @@ class RowFollow(Node):
             self.get_logger().info('End of the row!')
             self.mode = 'ml'
         else:
-            self.mode = 'ml'             
+            self.mode = 'rd'    
 
 def main(args=None):
     rclpy.init(args=args)
